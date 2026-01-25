@@ -497,7 +497,7 @@ async def handle_use_project(
 
     用法: /use <project_id>
 
-    功能：切换到指定项目（更新当前会话的项目）
+    功能：切换到指定项目（自动设为默认项目）
     """
     try:
         db_manager = get_db_manager()
@@ -511,16 +511,17 @@ async def handle_use_project(
 
             if not project.enabled:
                 return False, f"❌ 项目 `{project_id}` 已禁用"
-
-        # 更新会话的项目 ID
-        if user_id:
-            from ..session_manager import get_session_manager
-            session_mgr = get_session_manager()
-            await session_mgr.set_session_project(user_id, chat_id, bot_key, project_id)
+            
+            # 将该项目设为默认项目（这样重置会话后仍然使用该项目）
+            success = await repo.set_default(bot_key, chat_id, project_id)
+            if not success:
+                return False, f"❌ 设置默认项目失败"
+            
+            await session.commit()
 
         # 构建成功消息
         lines = [
-            f"✅ 已切换到项目 `{project_id}`",
+            f"✅ 已切换到项目 `{project_id}` 并设为默认",
             f"📦 项目名称: {project.project_name or project_id}",
             f"🔗 转发目标: `{project.url_template}`",
         ]
@@ -532,7 +533,7 @@ async def handle_use_project(
             lines.append(f"⏱️ 超时: {project.timeout}秒")
 
         lines.append("")
-        lines.append("💡 现在可以开始对话了！")
+        lines.append("💡 此项目将在所有新会话中使用（包括 /r 重置后）")
 
         return True, "\n".join(lines)
 
